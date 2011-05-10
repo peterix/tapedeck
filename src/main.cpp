@@ -12,6 +12,7 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
     app.setApplicationName("MUL");
     mul appGui;
+    appGui.setWindowTitle("tapedeck");
     appGui.show();
     return app.exec();
 }

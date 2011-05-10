@@ -1,0 +1,26 @@
+project(mul)
+cmake_minimum_required(VERSION 2.6)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${mul_SOURCE_DIR}/CMake/")
+find_package(Qt4 QUIET)
+find_package(Sndfile QUIET)
+find_package(Lame QUIET)
+
+SET( EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/output CACHE PATH "Output directory for the mul" )
+
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+   message(SEND_ERROR "In-source builds are not allowed.")
+endif("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+
+IF(NOT DEFINED CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: None(CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel.")
+ENDIF(NOT DEFINED CMAKE_BUILD_TYPE)
+
+if(QT4_FOUND AND SNDFILE_FOUND AND Lame_FOUND)
+    IF(QT_VERSION_MAJOR MATCHES 4 AND QT_VERSION_MINOR GREATER 6)
+        add_subdirectory (src)
+    ELSE(QT_VERSION_MAJOR MATCHES 4 AND QT_VERSION_MINOR GREATER 6)
+        MESSAGE(STATUS "Your Qt libraries are too old. Use at least 4.7.0.")
+    ENDIF(QT_VERSION_MAJOR MATCHES 4 AND QT_VERSION_MINOR GREATER 6)
+else()
+    MESSAGE(STATUS "Required libraries (Qt, Sndfile, Lame) not found - mul can't be built.")
+endif()

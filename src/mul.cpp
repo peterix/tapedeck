@@ -186,6 +186,8 @@ void Recorder::start(int rec_idx, work_data data)
     // create a fresh, new work order
     mkWorkOrder();
     open(QIODevice::WriteOnly);
+    detector = 0;
+    delay = 0;
 }
 void Recorder::stateChange(RecorderState newstate)
 {
@@ -273,32 +275,48 @@ qint64 Recorder::writeData(const char *data, qint64 len)
             qWarning() << "inactive Recorder is getting data!" << endl;
             break;
         case listening:
-            /*
             for (; i < numSamples; ++i)
             {
                 qint16 value = qFromLittleEndian<qint16>(ptr);
-                // TODO: feed it to the lead model (watch for at least 100 consecutive strongly negative samples)
+                if(delay) delay --;
+                else
+                {
+                    if(value > 12000)
+                        detector ++;
+                    else detector = 0;
+                    if(detector == 500)
+                    {
+                        startRecording();
+                        delay = 3*44100;
+                        detector = 0;
+                        break;
+                    }
+                }
                 ptr += channelBytes;
             }
-            */
             // listening for a bump
-            startRecording();
+            
             break;
         case recording:
-            // FIXME: temporary thing for testing splitting work orders
-            if(current_task->file_index == 3)
-            {
-                finishRecording(1);
-                startRecording();
-            }
-            /*
             for (; i < numSamples; ++i)
             {
                 qint16 value = qFromLittleEndian<qint16>(ptr);
-                // TODO: feed it to the trail model (watch for at least 100 consecutive strongly positive samples)
+                if(delay) delay --;
+                else
+                {
+                    if(value > 12000)
+                        detector ++;
+                    else detector = 0;
+                    if(detector == 500)
+                    {
+                        finishRecording(1);
+                        delay = 3*44100;
+                        detector = 0;
+                        break;
+                    }
+                }
                 ptr += channelBytes;
             }
-            */
             break;
         case finished_record:
             qWarning() << "inattentive Recorder is getting data!" << endl;

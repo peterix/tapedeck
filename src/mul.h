@@ -53,7 +53,6 @@ public:
     // push data into the temp files
     void push_data(const char* data, qint64 len);
     bool do_process ();
-    
     RecorderState state;
     // list of files used for storing temporary data
     QList <QFile *> recfiles;
@@ -125,6 +124,9 @@ private:
     work_order * current_task;
     const QAudioFormat m_format;
     int next_record_idx;
+    // detekce lupancu
+    quint32 detector;
+    quint32 delay;
 signals:
     void update();
     void postRecorderState(int index, RecorderState s);

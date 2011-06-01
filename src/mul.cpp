@@ -69,14 +69,18 @@ void work_order::push_data(const char* data, qint64 len)
             mkFile();
         }
     }
+    total_length += len;
 }
 
 // do all the work!
 void Worker::doTaskImpl( work_order * param )
 {
+    quint64 processed = 0;
+    quint64 total = param->total_length;
+    int perc = 0, perc_old = 0;
     if(param->data.do_mp3)
     {
-        emit postTaskState( param->record_index, encoding_mp3 );
+        emit postTaskState( param->record_index, encoding_mp3 ,0);
         QString filePath = param->data.outDir.absoluteFilePath
         (
             QString::fromUtf8("Záznam ")
@@ -96,9 +100,12 @@ void Worker::doTaskImpl( work_order * param )
 
         lame_t lame = lame_init();
         lame_set_in_samplerate(lame, 44100);
-        //lame_set_num_channels(lame,1);
+        lame_set_num_channels(lame,1);
+        lame_set_quality(lame,2);
+        lame_set_VBR(lame, vbr_off);
+        lame_set_preset(lame, 192);
         lame_set_mode(lame,MONO);
-        lame_set_VBR(lame, vbr_default);
+        //lame_set_VBR(lame, vbr_default);
         lame_init_params(lame);
         foreach(QFile * f, param->recfiles )
         {
@@ -115,6 +122,15 @@ void Worker::doTaskImpl( work_order * param )
                 else
                     write = lame_encode_buffer(lame, pcm_buffer,pcm_buffer, read, mp3_buffer, MP3_SIZE);
                 MP3.write( ( const char *)mp3_buffer,write);
+                // update progress if required
+                processed += dataz.size();
+                double percentage = (double) processed / (double) total;
+                perc = percentage * 100.0;
+                if(perc != perc_old)
+                {
+                    perc_old = perc;
+                    emit postTaskState( param->record_index, encoding_mp3 ,perc);
+                }
             } while (read != 0);
             f->close();
             f->remove(); // delete temp
@@ -127,7 +143,7 @@ void Worker::doTaskImpl( work_order * param )
     }
     else
     {
-        emit postTaskState( param->record_index, encoding_wav );
+        emit postTaskState( param->record_index, encoding_wav ,0);
         QString filePath = param->data.outDir.absoluteFilePath
         (
             QString::fromUtf8("Záznam ")
@@ -153,9 +169,18 @@ void Worker::doTaskImpl( work_order * param )
             outfile.write( (const short int *)data.data(), data.size()/2);
             f->close();
             f->remove(); // delete temp
+            // update progress if required
+            processed += data.size();
+            double percentage = (double) processed / (double) total;
+            perc = percentage * 100.0;
+            if(perc != perc_old)
+            {
+                perc_old = perc;
+                emit postTaskState( param->record_index, encoding_wav ,perc);
+            }
         }
     }
-    emit postTaskState( param->record_index, finished_process );
+    emit postTaskState( param->record_index, finished_process ,0);
 }
 
 Recorder::Recorder(const QAudioFormat &format, QObject *parent)
@@ -196,7 +221,7 @@ void Recorder::stateChange(RecorderState newstate)
     if(current_task->state != newstate)
     {
         current_task->state = newstate;
-        emit postRecorderState(current_task->record_index, newstate);
+        emit postRecorderState(current_task->record_index, newstate,0);
     }
 }
 
@@ -211,7 +236,7 @@ int Recorder::stop()
         case listening:
             // we were listening, we become inactive.
             stateChange(inactive);
-            break;
+            return next_record_idx - 1;
         case recording:
             finishRecording(0);
             break;
@@ -275,6 +300,7 @@ qint64 Recorder::writeData(const char *data, qint64 len)
             qWarning() << "inactive Recorder is getting data!" << endl;
             break;
         case listening:
+            // listening for a bump
             for (; i < numSamples; ++i)
             {
                 qint16 value = qFromLittleEndian<qint16>(ptr);
@@ -294,10 +320,9 @@ qint64 Recorder::writeData(const char *data, qint64 len)
                 }
                 ptr += channelBytes;
             }
-            // listening for a bump
-            
             break;
         case recording:
+            // listening for a bump, again.
             for (; i < numSamples; ++i)
             {
                 qint16 value = qFromLittleEndian<qint16>(ptr);
@@ -469,7 +494,7 @@ bool mul::setAudioDevice(int index)
     connect(m_audioInput, SIGNAL(notify()), SLOT(notified()));
     connect(m_audioInput, SIGNAL(stateChanged(QAudio::State)), SLOT(stateChanged(QAudio::State)));
     connect(m_recorder, SIGNAL(finished(work_order*)),this,SLOT(recorderFinished(work_order*)));
-    connect(m_recorder, SIGNAL(postRecorderState(int,RecorderState)),this,SLOT(recorderStatus(int,RecorderState)));
+    connect(m_recorder, SIGNAL(postRecorderState(int,RecorderState,int)),this,SLOT(recorderStatus(int,RecorderState,int)));
 }
 
 void mul::slotPickOutput(bool )
@@ -551,12 +576,14 @@ void mul::slotArm(bool status)
     else
     {
         // enable controls here
-        ui.checkDivide->setDisabled(1); // FIXME: implement
-        ui.checkMP3->setDisabled(0);
+        // FIXME: implement
+        ui.checkDivide->setDisabled(1); 
         ui.checkNormalize->setDisabled(1);
         ui.checkTrim->setDisabled(1);
+        ui.MP3Button->setDisabled(1);
+
+        ui.checkMP3->setDisabled(0);
         ui.devicesCBox->setDisabled(0);
-        ui.MP3Button->setDisabled(0);
         ui.outDirBrowse->setDisabled(0);
         ui.outDirText->setDisabled(0);
         ui.workDirBrowse->setDisabled(0);
@@ -580,7 +607,7 @@ void mul::recorderFinished(work_order * ord)
     }
     Worker * w = new Worker(ord->record_index);
     workers[ord->record_index] = w;
-    connect(w,SIGNAL(postTaskState(int,RecorderState)),this,SLOT(recorderStatus(int,RecorderState)));
+    connect(w,SIGNAL(postTaskState(int,RecorderState,int)),this,SLOT(recorderStatus(int,RecorderState,int)));
     connect(w,SIGNAL(finished(int)),this,SLOT(workerFinished(int)));
     active_workers++;
     w->doTask(ord);
@@ -594,7 +621,7 @@ void mul::workerFinished( int id )
     delete w;
 }
 
-void mul::recorderStatus(int index, RecorderState state)
+void mul::recorderStatus(int index, RecorderState state, int progress)
 {
     qWarning() << "Received status update #" << index << endl;
     int nrows = ui.seznam->rowCount();
@@ -632,12 +659,15 @@ void mul::recorderStatus(int index, RecorderState state)
             break;
         case encoding_wav:
             it_action->setText(QString::fromUtf8("Zápis wav"));
+            it_progress->setText(QString::number(progress) + " %");
             break;
         case encoding_mp3:
             it_action->setText(QString::fromUtf8("Zápis mp3"));
+            it_progress->setText(QString::number(progress) + " %");
             break;
         case finished_process:
             it_action->setText(QString::fromUtf8("Hotovo"));
+            it_progress->setText(QString::fromUtf8("100 %"));
             break;
     }
 }

@@ -43,6 +43,7 @@ public:
         record_index = index;
         this->data = data;
         file_index = 0;
+        total_length = 0;
         currentFile = 0;
         current_file_length = 0;
     };
@@ -61,6 +62,7 @@ public:
     int file_index;   // current file of the recording (for names)
     QFile * currentFile;
     quint64 current_file_length;
+    quint64 total_length; // in bytes!
 };
 
 class Worker : public QObject
@@ -93,7 +95,7 @@ private slots:
     void doTaskImpl( work_order * param );
     
 signals:
-    void postTaskState(int index, RecorderState s);
+    void postTaskState(int index, RecorderState s, int progress);
     void finished(int id);
     
 private:
@@ -129,7 +131,7 @@ private:
     quint32 delay;
 signals:
     void update();
-    void postRecorderState(int index, RecorderState s);
+    void postRecorderState(int index, RecorderState s, int progress);
     void finished(work_order * ord);
 };
 
@@ -164,7 +166,7 @@ private:
 public slots:
     void notified();
     void stateChanged(QAudio::State state);
-    void recorderStatus(int index, RecorderState state);
+    void recorderStatus(int index, RecorderState state, int progress);
     void recorderFinished(work_order*);
     void workerFinished(int id);
 
